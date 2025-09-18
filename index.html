@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>OzodbekDev — Mini Music Player</title>
+  <meta name="description" content="OzodbekDev musiqa pleyeri."/>
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    :root{
+      --bg1:#0f1220; --bg2:#0b0e1a; --glass:rgba(255,255,255,.06);
+      --text:#e7ebff; --muted:#aab0d4; --accent:#7aa2ff; --accent-2:#5ce1e6;
+      --border:rgba(255,255,255,.12);
+      --radius:20px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Sans",Arial;
+      color:var(--text); background: radial-gradient(1200px 800px at 20% -10%, #2a2f63 0%, transparent 40%),
+                          radial-gradient(900px 700px at 110% 20%, #0b7cff33 0%, transparent 50%),
+                          linear-gradient(160deg,var(--bg1),var(--bg2));
+      overflow-y:auto;
+    }
+    .bg-shape{
+      position:fixed; inset:0; pointer-events:none; z-index:-1; filter:blur(40px) saturate(120%);
+    }
+    .bg-shape::before,.bg-shape::after{
+      content:""; position:absolute; width:360px; height:360px; border-radius:32px;
+      background:conic-gradient(from 120deg, #7aa2ff33, #5ce1e622, #7aa2ff33);
+      animation:float 14s ease-in-out infinite;
+    }
+    .bg-shape::before{ top:10%; left:10%; transform:rotate(12deg)}
+    .bg-shape::after { bottom:8%; right:12%; transform:rotate(-18deg); animation-duration:18s}
+    @keyframes float{
+      0%,100%{transform:translate3d(0,0,0) rotate(0deg)}
+      50%{transform:translate3d(0,-18px,0) rotate(6deg)}
+    }
+
+    .wrap{
+      min-height:100%; display:flex; flex-direction:column; align-items:center; gap:18px; padding:32px 16px 60px;
+    }
+    header{
+      width:min(1100px,92%); display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:10px 14px; border:1px solid var(--border); border-radius:calc(var(--radius) - 8px);
+      background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+      backdrop-filter: blur(8px); box-shadow:0 10px 30px #00000033;
+    }
+    .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.3px}
+    .brand svg{width:28px; height:28px}
+    .brand small{color:var(--muted); font-weight:500}
+
+    .player{
+      width:min(1100px,92%); display:grid; grid-template-columns: 1fr; gap:16px;
+      border:1px solid var(--border); border-radius:var(--radius);
+      background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.03));
+      backdrop-filter: blur(10px); box-shadow:0 20px 60px #00000044; padding:16px;
+    }
+    @media (min-width:880px){
+      .player{ grid-template-columns: 320px 1fr; }
+    }
+
+    .cover{
+      border:2px solid #ffffff22; border-radius:16px; overflow:hidden; aspect-ratio:1/1;
+      background:#0d1022 url('/music/default.jpg') center/cover no-repeat;
+    }
+    .cover img{width:100%; height:100%; object-fit:cover; display:block}
+
+    .meta{
+      display:grid; grid-template-rows:auto auto 1fr auto; gap:12px; min-width:0;
+    }
+    .title{font-size:clamp(18px,2.6vw,28px); font-weight:800; line-height:1.2; word-break:break-word}
+    .artist{color:var(--muted); font-size:14px}
+    .progress{display:grid; gap:8px}
+    .bar{appearance:none; width:100%}
+    .bar::-webkit-slider-runnable-track{height:6px; border-radius:999px; background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+    .bar::-webkit-slider-thumb{appearance:none; width:16px; height:16px; border-radius:50%; background:#fff; margin-top:-5px; box-shadow:0 2px 8px #0004}
+    .time{display:flex; justify-content:space-between; font-variant-numeric:tabular-nums; color:var(--muted); font-size:12px}
+
+    .ctrls{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:12px 14px;
+      border-radius:14px; border:1px solid var(--border); background:var(--glass); cursor:pointer; user-select:none;
+      transition:.15s transform ease,.15s background ease; font-weight:700;
+    }
+    .btn:hover{transform:translateY(-1px); background:rgba(255,255,255,.12)}
+    .btn:active{transform:translateY(0)}
+    .btn svg{width:22px; height:22px}
+    .btn.primary{background:linear-gradient(180deg,var(--accent),#5b7dff); border-color:transparent; color:#0b0f2a}
+    .btn.ghost{background:transparent}
+
+    .volwrap{margin-left:auto; display:flex; align-items:center; gap:8px}
+    .vol{width:120px}
+
+
+.list{
+  width:min(1100px,92%);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+  backdrop-filter:blur(8px);
+  box-shadow:0 15px 40px #00000033;
+  padding:8px;
+
+  max-height:200px; /* Ro‘yxat balandligini cheklash */
+  overflow-y:auto;  /* Ichida scroll chiqishi */
+  scrollbar-width:thin;
+  scrollbar-color:var(--accent-2) transparent;
+}
+
+.list::-webkit-scrollbar {
+  width:6px;
+}
+.list::-webkit-scrollbar-track {
+  background:transparent;
+}
+.list::-webkit-scrollbar-thumb {
+  background-color:var(--accent-2);
+  border-radius:4px;
+}
+
+.row{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:10px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  transition:.12s background ease;
+  border:1px solid transparent;
+}
+.row:hover{background:rgba(255,255,255,.08)}
+.row.active{background:rgba(122,162,255,.15); border-color:#7aa2ff55}
+.row .icon{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:#1a1f3b;
+  border:1px solid #ffffff1a;
+}
+.row .icon svg{
+  width:18px;
+  height:18px;
+}
+.row .txt{min-width:0}
+.row .name{
+  font-weight:700;
+  font-size:15px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.row .by{
+  color:var(--muted);
+  font-size:12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.row .len{
+  color:var(--muted);
+  font-size:12px;
+}
+
+footer{
+  color:var(--muted);
+  font-size:12px;
+  text-align:center;
+  margin-top:6px;
+}
+a{
+  color:var(--accent-2);
+  text-decoration:none;
+}
+a:hover{
+  text-decoration:underline;
+}
+  </style>
+</head>
+<body>
+  <div class="bg-shape"></div>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <!-- inline logo-ish icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+  <path stroke-linecap="round" stroke-linejoin="round" d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z" />
+</svg>
+
+        <span>ㅤ OzodbekDev- Mini Player</span>
+      </div>
+    </header>
+
+    <section class="player" role="region" aria-label="Music player">
+      <div class="cover" id="cover"><img id="coverImg" alt="Cover"></div>
+      <div class="meta">
+        <div class="title" id="title">Trek nomi</div>
+        <div class="artist" id="artist">Muallif</div>
+
+        <div class="progress">
+          <input class="bar" id="seek" type="range" min="0" max="100" value="0" step="0.1" aria-label="Playback position">
+          <div class="time"><span id="cur">00:00</span><span id="dur">00:00</span></div>
+        </div>
+
+        <div class="ctrls">
+          <button class="btn ghost" id="prev" title="Oldingi (Prev)" aria-label="Oldingi">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M6 6v12M18 6l-8 6 8 6V6z" stroke="currentColor" stroke-width="1.8"/></svg>
+          </button>
+          <button class="btn primary" id="play" title="Play/Pause" aria-label="Play/Pause">
+            <svg id="playIcon" viewBox="0 0 24 24" fill="none">
+              <path d="M8 5v14l11-7-11-7z" fill="currentColor"/>
+            </svg>
+          </button>
+          <button class="btn ghost" id="next" title="Keyingi (Next)" aria-label="Keyingi">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6v12M6 6l8 6-8 6V6z" stroke="currentColor" stroke-width="1.8"/></svg>
+          </button>
+
+          <button class="btn ghost" id="repeat" title="Takrorlash" aria-label="Takrorlash">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M17 2l3 3-3 3M7 22l-3-3 3-3" stroke="currentColor" stroke-width="1.6"/>
+            <path d="M20 5H9a5 5 0 0 0 0 10h10M4 19h11a5 5 0 0 0 0-10H4" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+
+          <div class="volwrap">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 15H3V9h2l4-3v12l-4-3z" stroke="currentColor" stroke-width="1.6"/><path d="M14 9a3 3 0 0 1 0 6M16.5 6.5a7 7 0 0 1 0 11" stroke="currentColor" stroke-width="1.6"/></svg>
+            <input class="bar vol" id="vol" type="range" min="0" max="1" step="0.01" value="1" aria-label="Ovoz">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="list" id="list" role="list" aria-label="Musiqalar ro‘yxati">
+      <!-- Dinamik yuklanadi -->
+    </section>
+
+    <footer>© <span id="year"></span> ozodbekdev.uz </footer>
+  </div>
+
+  <audio id="audio" preload="metadata" crossorigin="anonymous"></audio>
+
+  <script>
+    const $ = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
+    const audio = $('#audio');
+    const UI = {
+      coverImg: $('#coverImg'), title: $('#title'), artist: $('#artist'),
+      seek: $('#seek'), cur: $('#cur'), dur: $('#dur'),
+      prev: $('#prev'), play: $('#play'), playIcon: $('#playIcon'),
+      next: $('#next'), repeat: $('#repeat'), vol: $('#vol'),
+      list: $('#list'), year: $('#year')
+    };
+    UI.year.textContent = new Date().getFullYear();
+
+    const DEFAULT_COVER = '/music/default.jpg';
+    const STORAGE_KEY = 'ozod_mplayer_v1';
+    let tracks = [];
+    let i = 0;
+    let repeating = false;
+    let saveTimer = null;
+
+    function fmtTime(sec){
+      if(!isFinite(sec)) return '00:00';
+      sec = Math.max(0, Math.floor(sec));
+      const m = Math.floor(sec/60).toString().padStart(2,'0');
+      const s = (sec%60).toString().padStart(2,'0');
+      return `${m}:${s}`;
+    }
+
+    function loadList(){
+      return fetch('./mus.php')
+        .then(r => r.json())
+        .then(json => {
+          tracks = json.data || [];
+          renderList();
+          restoreState();
+        })
+        .catch(() => { UI.list.innerHTML = `<div style="padding:12px;color:#f99">Ro'yxatni yuklashda xatolik.</div>`; });
+    }
+
+    function renderList(){
+      if(!tracks.length){
+        UI.list.innerHTML = `<div style="padding:12px;color:#aab0d4">Hali treklar yo'q. <code>/music/musiqalar/</code> ga fayl qo'shing.</div>`;
+        return;
+      }
+      UI.list.innerHTML = '';
+      tracks.forEach((t, idx) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.setAttribute('role','listitem');
+        row.innerHTML = `
+          <div class="icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 18V6l10-3v12" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="18" r="3" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <div class="txt">
+            <div class="name">${t.title}</div>
+            <div class="by">${t.artist}</div>
+          </div>
+          <div class="len">${t.length || ''}</div>
+        `;
+        row.addEventListener('click', () => playIndex(idx, true));
+        UI.list.appendChild(row);
+      });
+      highlightActive();
+    }
+
+    function highlightActive(){
+      $$('.row').forEach((el, idx) => {
+        el.classList.toggle('active', idx === i);
+      });
+    }
+
+    function setMeta(t){
+      UI.title.textContent = t.title || 'Noma’lum trek';
+      UI.artist.textContent = t.artist || 'Noma’lum muallif';
+      UI.coverImg.src = t.cover || DEFAULT_COVER;
+      UI.coverImg.onerror = () => UI.coverImg.src = DEFAULT_COVER;
+      document.title = `${t.title} — ${t.artist} • Mini Player`;
+    }
+
+    function loadAudio(t){
+      audio.src = t.src;
+      audio.load();
+    }
+
+    function playIndex(idx, autoplay=false){
+      i = (idx + tracks.length) % tracks.length;
+      const t = tracks[i];
+      setMeta(t);
+      loadAudio(t);
+      highlightActive();
+      if(autoplay) audio.play().catch(()=>{});
+      saveState();
+    }
+
+    function togglePlay(){
+      if(audio.paused) audio.play().catch(()=>{});
+      else audio.pause();
+      UI.playIcon.innerHTML = audio.paused
+        ? `<path d="M8 5v14l11-7-11-7z" fill="currentColor"/>`
+        : `<path d="M8 6h3v12H8zM13 6h3v12h-3z" fill="currentColor"/>`;
+    }
+
+    // Events
+    audio.addEventListener('play', ()=> {
+      UI.playIcon.innerHTML = `<path d="M8 6h3v12H8zM13 6h3v12h-3z" fill="currentColor"/>`;
+    });
+    audio.addEventListener('pause', ()=> {
+      UI.playIcon.innerHTML = `<path d="M8 5v14l11-7-11-7z" fill="currentColor"/>`;
+    });
+    audio.addEventListener('loadedmetadata', ()=>{
+      UI.dur.textContent = fmtTime(audio.duration);
+      UI.seek.max = Math.max(1, audio.duration || 1);
+      // Agar uzunlik bo'sh bo'lsa, ro'yxatdagi length ni to'ldiramiz (bir marta)
+      if(tracks[i] && !tracks[i].length){
+        tracks[i].length = fmtTime(audio.duration);
+        const lenEl = $$('.row .len')[i]; if(lenEl) lenEl.textContent = tracks[i].length;
+      }
+      const state = getState();
+      if(state && state.idx === i && state.pos && state.pos < audio.duration-2) {
+        audio.currentTime = state.pos;
+      }
+    });
+    audio.addEventListener('timeupdate', ()=>{
+      UI.cur.textContent = fmtTime(audio.currentTime);
+      UI.seek.value = audio.currentTime;
+      // kechiktirib saqlash
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveState, 600);
+    });
+    audio.addEventListener('ended', ()=>{
+      if(repeating) { audio.currentTime = 0; audio.play(); return; }
+      next();
+    });
+
+    UI.seek.addEventListener('input', ()=>{ audio.currentTime = +UI.seek.value; });
+    UI.prev.addEventListener('click', ()=> prev());
+    UI.next.addEventListener('click', ()=> next());
+    UI.play.addEventListener('click', ()=> togglePlay());
+    UI.repeat.addEventListener('click', ()=>{
+      repeating = !repeating;
+      UI.repeat.classList.toggle('primary', repeating);
+      UI.repeat.title = repeating ? 'Takror: Yoqilgan' : 'Takror: O‘chirilgan';
+      saveState();
+    });
+    UI.vol.addEventListener('input', ()=>{ audio.volume = +UI.vol.value; saveState(); });
+
+    function prev(){ playIndex(i-1, true); }
+    function next(){ playIndex(i+1, true); }
+
+    document.addEventListener('keydown', (e)=>{
+      if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if(e.code === 'Space'){ e.preventDefault(); togglePlay(); }
+      if(e.code === 'ArrowRight'){ audio.currentTime = Math.min(audio.currentTime + 5, audio.duration||audio.currentTime); }
+      if(e.code === 'ArrowLeft'){ audio.currentTime = Math.max(audio.currentTime - 5, 0); }
+      if(e.key.toLowerCase()==='j'){ audio.currentTime = Math.max(audio.currentTime - 10, 0); }
+      if(e.key.toLowerCase()==='l'){ audio.currentTime = Math.min(audio.currentTime + 10, audio.duration||audio.currentTime); }
+      if(e.key.toLowerCase()==='k'){ togglePlay(); }
+    });
+
+    function getState(){
+      try{ return JSON.parse(localStorage.getItem(STORAGE_KEY)||''); }catch{ return null; }
+    }
+    function saveState(){
+      const state = {
+        idx: i, pos: Math.floor(audio.currentTime||0),
+        vol: +UI.vol.value, repeat: repeating
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    function restoreState(){
+      if(!tracks.length) return;
+      const st = getState();
+      const startIdx = (st && st.idx>=0 && st.idx < tracks.length) ? st.idx : 0;
+      playIndex(startIdx, false);
+      if(st){
+        UI.vol.value = st.vol ?? 1; audio.volume = +UI.vol.value;
+        repeating = !!st.repeat; UI.repeat.classList.toggle('primary', repeating);
+      }
+    }
+
+    loadList();
+  </script>
+</body>
+</html>
